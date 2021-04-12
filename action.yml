@@ -1,0 +1,32 @@
+name: Setup SSH Agent and Key
+author: Tanveer Karim
+description: Configure SSH key and persist the ssh-agent across all steps in a job.
+branding:
+  icon: tool
+  color: "orange"
+
+inputs:
+  ssh-auth-sock:
+    description: A custom path to the unix socket to bind the ssh-agent (optional).
+    required: false
+    default: /tmp/ssh_auth.sock
+  ssh-key:
+    description: The private key to add.
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    # What happens here:
+    # - First we export the ssh auth socket to the workflow global environment.
+    #   This allows all subsequent steps in a job to communicate with this agent.
+    # - Second we run the ssh-agent and bind it to our socket
+    # - Finally we add the ssh private key directly from our input variable, without
+    #   needing to create a file.
+    - run: |
+        echo "SSH_AUTH_SOCK=${SSH_AUTH_SOCK}" >> $GITHUB_ENV
+        ssh-agent -a ${SSH_AUTH_SOCK} > /dev/null
+        ssh-add - <<< "${{ inputs.ssh-key }}"
+      env:
+        SSH_AUTH_SOCK: ${{ inputs.ssh-auth-sock }}
+      shell: bash
