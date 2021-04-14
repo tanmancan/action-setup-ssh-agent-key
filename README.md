@@ -4,14 +4,14 @@ Configure SSH key and persist the ssh-agent across all steps in a job.
 
 ## Inputs
 
-| name          | description                                                        | required | default            |
-| ------------- | ------------------------------------------------------------------ | -------- | ------------------ |
-| ssh-auth-sock | A custom path to the unix socket to bind the ssh-agent (optional). | no       | /tmp/ssh_auth.sock |
-| ssh-key       | The private key to add.                                            | yes      | -                  |
+| name          | description                                             | required | default            |
+| ------------- | ------------------------------------------------------- | -------- | ------------------ |
+| ssh-auth-sock | A custom path to the unix socket to bind the ssh-agent. | no       | /tmp/ssh_auth.sock |
+| ssh-key       | The private key to add.                                 | yes      | -                  |
 
 ## How to Use
 
-Define a step and set the action via `uses`. You will need pass the private SSH via the input parameter, `ssh-key`. You can optionally set a custom path to the unix socket to bind the ssh-agent.
+Define a step and set the action via `uses`. You will need pass the private SSH key via the input parameter, `ssh-key`. It is highly recommended you use secrets to do this. You can optionally set a custom path to the unix socket to bind the ssh-agent.
 
 ```yaml
 - uses: tanmancan/action-setup-ssh-agent-key@v1.0
@@ -19,7 +19,7 @@ Define a step and set the action via `uses`. You will need pass the private SSH 
     # Optional path to the unix socket
     ssh-auth-sock: /tmp/my_auth.sock
     # Pass in the private key from repository secrets.
-    ssh-key: ${{ secrets.SSH_DEPLOY_GH }}
+    ssh-key: ${{ secrets.PRIVATE_KEY }}
 ```
 
 Example in an workflow.
@@ -40,30 +40,30 @@ jobs:
           # Optional path to the unix socket
           ssh-auth-sock: /tmp/my_auth.sock
           # Pass in the private key from repository secrets.
-          ssh-key: ${{ secrets.SSH_DEPLOY_GH }}
+          ssh-key: ${{ secrets.PRIVATE_KEY }}
 
       - name: SSH Command Example
-        run: ssh test@example.com
+        run: ssh -T test@example.com
         ...
 
       - name: Another SSH Command Example
-        run: ssh test2@example.com
+        run: ssh -T test2@example.com
         ...
 ```
 
 ## Why use this
 
-### Summary;
+### Summary
 
-Each step in a job is isolated to its own environment variables. This action exports `SSH_AUTH_SOCK` in a step to a global variable, so any subsequent steps can communicate with the `ssh-agent`.
+Each step runs in its own process and has its own environment variable. This action exports `SSH_AUTH_SOCK` from a step to a global variable, so any subsequent steps can communicate with the `ssh-agent`.
 
-### How `ssh-agent` communicates
+### How the `ssh-agent` communicates
 
 When you start a `ssh-agent` via `` eval `ssh-agent` ``, it will bind to a unix socket located in `/tmp/ssh-XXXXXXXXXX/agent.pid`. This socket will be exported to a variable called `SSH_AUTH_SOCK`.
 
-Other process can use this socket to communicate with the agent. For example, `ssh-add` uses the socket to communicate with the `ssh-agent` to add identities.
+Other process will look for this socket in `SSH_AUTH_SOCK` and use it to communicate with the agent. For example, `ssh-add` uses the socket to add identities to the agent.
 
-If the agent is not running, or if the SSH_AUTH_SOCK is empty, you may see the following error:
+If the agent is not running, or if the `SSH_AUTH_SOCK` is empty, you may see the following error:
 
 ```bash
 ssh-add
@@ -73,15 +73,15 @@ Could not open a connection to your authentication agent.
 
 ### Steps in a job do not share environment
 
-Each step in a job runs in its own process and has is own environment. This means that the `SSH_AUTH_SOCK` are not shared between steps. So if you configured the `ssh-agent` and SSH keys in one step, other steps won't be able to use the identities.
+Each step in a job runs in its own process and has is own environment. This means if you start the `ssh-agent`in one step, other steps won't be able to use the exported `SSH_AUTH_SOCK`.
 
 ```yaml
-# Configures ssh-agent, echo SSH_AUTH_SOCK, and
+# Starts ssh-agent, adds keys, echo SSH_AUTH_SOCK, and
 # ssh into github.
 - name: Configure SSH
   run: |
     eval `ssh-agent -s`
-    ssh-add - <<< "${{ secrets.SSH_DEPLOY_GH }}"
+    ssh-add - <<< "${{ secrets.PRIVATE_KEY }}"
 
     echo $SSH_AUTH_SOCK
     ssh -T git@github.com
@@ -98,14 +98,13 @@ Each step in a job runs in its own process and has is own environment. This mean
 The first step will print the location of the `SSH_AUTH_SOCK` and a success message from Github:
 
 ```
-Agent pid XXXX
-Identity added: (stdin) ((stdin))
+...
 /tmp/ssh-XXXXXXXXX/agent.XXXX
-Warning: Permanently added the RSA host key for IP address '111.11.111.1' to the list of known hosts.
+...
 Hi user/testing! You've successfully authenticated, but GitHub does not provide shell access
 ```
 
-But the second step will print an empty value for `SSH_AUTH_SOCK` and show an permission denied error from Github.
+But the second step will print an empty value for `SSH_AUTH_SOCK` and a permission denied message from Github.
 
 ```yaml
 # Empty line from echo SSH_AUTH_SOCK
@@ -124,17 +123,14 @@ echo "{name}={value}" >> $GITHUB_ENV
 ```
 
 ```yaml
-# Export the SSH_AUTH_SOCK to $GITHUB_ENV
 - name: Configure SSH
   run: |
     eval `ssh-agent -s`
-    echo $SSH_AUTH_SOCK
+    ssh-add - <<< "${{ secrets.PRIVATE_KEY }}"
+
+    # Export SSH_AUTH_SOCK to the workflow env
     echo "SSH_AUTH_SOCK=${SSH_AUTH_SOCK}" >> $GITHUB_ENV
-
-    ssh-add - <<< "${{ secrets.SSH_DEPLOY_GH }}"
-
-    ssh -T git@github.com
-  continue-on-error: true
+  ...
 
 # Echoes SSH_AUTH_SOCK and ssh into github
 - name: Run SSH
@@ -144,9 +140,10 @@ echo "{name}={value}" >> $GITHUB_ENV
   continue-on-error: true
 ```
 
-The second step should now be able to print the `SSH_AUTH_SOCK` and successfully ssh into Github.
+The second will now be print the `SSH_AUTH_SOCK` and successfully ssh into Github.
 
 ```
 /tmp/ssh-XXXXXXXXX/agent.XXXX
+...
 Hi user/testing! You've successfully authenticated, but GitHub does not provide shell access.
 ```
