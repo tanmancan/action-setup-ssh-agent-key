@@ -114,7 +114,7 @@ git@github.com: Permission denied (publickey).
 
 ### Using workflow environment to share data between steps.
 
-To get around this, we will bind our ssh-agent to a socket stored inside the global workflow environment. This way all steps within a job will be able to access the `SSH_AUTH_SOCK`.
+To get around this, we can export our local `SSH_AUTH_SOCK` to a global workflow environment. This way all steps within a job will be able to access the `SSH_AUTH_SOCK`.
 
 To export a local variable to the workflow environment, you can run the following command:
 
