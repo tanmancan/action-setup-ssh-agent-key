@@ -2,7 +2,7 @@ name: Setup SSH Agent and Key
 author: Tanveer Karim
 description: Configure SSH key and persist the ssh-agent across all steps in a job.
 branding:
-  icon: tool
+  icon: at-sign
   color: "orange"
 
 inputs:
