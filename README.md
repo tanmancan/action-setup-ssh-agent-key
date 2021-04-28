@@ -17,12 +17,12 @@ Configure SSH key and persist the ssh-agent across all steps in a job.
 Set a custom path for the Unix socket. If none provided, a default path will be used. The ssh-agent will bind to this socket via `ssh-agent -a [SOCKET_PATH]`. You can only set this value once. After the agent is started, you can no longer modify the socket path.
 
 ```yaml
-- uses: tanmancan/action-setup-ssh-agent-key@v1.0
+- uses: tanmancan/action-setup-ssh-agent-key@1.0.0
   with:
     # Optional path to the unix socket
     ssh-auth-sock: /tmp/my_custom.sock
 
-- uses: tanmancan/action-setup-ssh-agent-key@v1.0
+- uses: tanmancan/action-setup-ssh-agent-key@1.0.0
   with:
     # This will not do anything since the agent is already running
     ssh-auth-sock: /tmp/a_different.sock
@@ -34,14 +34,14 @@ Adds a private key to the agent via `ssh-add`. Highly recommended that you use a
 
 ```yaml
 # Set first private key
-- uses: tanmancan/action-setup-ssh-agent-key@v1.0
+- uses: tanmancan/action-setup-ssh-agent-key@1.0.0
   with:
     ssh-private-key: ${{ secrets.PRIVATE_KEY_ONE }}
   # Key for a first server
   run: ssh -T example@first.example.com "some_command"
 
 # Set second private key
-- uses: tanmancan/action-setup-ssh-agent-key@v1.0
+- uses: tanmancan/action-setup-ssh-agent-key@1.0.0
   with:
     ssh-private-key: ${{ secrets.PRIVATE_KEY_TWO }}
   # Key for a second server
@@ -60,11 +60,11 @@ It is highly recommended you use a [secret to store this value](https://docs.git
 
 ```yaml
 # Set first public key
-- uses: tanmancan/action-setup-ssh-agent-key@v1.0
+- uses: tanmancan/action-setup-ssh-agent-key@1.0.0
   with:
     ssh-public-key: ${{ secrets.PUBLIC_KEY_ONE }}
 # Set second public key
-- uses: tanmancan/action-setup-ssh-agent-key@v1.0
+- uses: tanmancan/action-setup-ssh-agent-key@1.0.0
   with:
     ssh-public-key: ${{ secrets.PUBLIC_KEY_TWO }}
 ```
@@ -82,7 +82,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - uses: tanmancan/action-setup-ssh-agent-key@v1.0
+      - uses: tanmancan/action-setup-ssh-agent-key@1.0.0
         with:
           ssh-auth-sock: /tmp/my_auth.sock
           ssh-private-key: ${{ secrets.PRIVATE_KEY_ONE }}
@@ -93,7 +93,7 @@ jobs:
         ...
 
       # Adds new private and public key to use with a second remote system
-      - uses: tanmancan/action-setup-ssh-agent-key@v1.0
+      - uses: tanmancan/action-setup-ssh-agent-key@1.0.0
         with:
           ssh-private-key: ${{ secrets.PRIVATE_KEY_TWO }}
           ssh-public-key: ${{ secrets.PUBLIC_KEY_TWO }}
