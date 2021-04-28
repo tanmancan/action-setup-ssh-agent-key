@@ -1,32 +1,76 @@
 name: Setup SSH Agent and Key
 author: Tanveer Karim
-description: Configure SSH key and persist the ssh-agent across all steps in a job.
+description: Configure SSH keys, hosts, and persist the ssh-agent across all steps in a job.
 branding:
   icon: at-sign
   color: "orange"
 
 inputs:
   ssh-auth-sock:
-    description: A custom path to the unix socket to bind the ssh-agent (optional).
+    description: Use a custom unix socket to bind the ssh-agent.
     required: false
     default: /tmp/ssh_auth.sock
-  ssh-key:
-    description: The private key to add.
-    required: true
+  ssh-private-key:
+    description: Add a private key to the ssh-agent.
+    required: false
+  ssh-public-key:
+    description: Add a public key to known_hosts. Format should be "{hostname} {key-type} {key}".
+    required: false
 
+# If and needs conditions are not supported in composite run step at this time:
+# https://github.com/actions/runner/blob/5941cceb7cac4f9a6231dedb710ce49e4245158a/docs/adrs/0549-composite-run-steps.md#if-condition
+# TODO: use a workflow conditional check when available
 runs:
   using: "composite"
   steps:
-    # What happens here:
-    # - First we export the ssh auth socket to the workflow global environment.
-    #   This allows all subsequent steps in a job to communicate with this agent.
-    # - Second we run the ssh-agent and bind it to our socket
-    # - Finally we add the ssh private key directly from our input variable, without
-    #   needing to create a file.
-    - run: |
-        echo "SSH_AUTH_SOCK=${SSH_AUTH_SOCK}" >> $GITHUB_ENV
-        ssh-agent -a ${SSH_AUTH_SOCK} > /dev/null
-        ssh-add - <<< "${{ inputs.ssh-key }}"
+    # If a public key is provided, checks if it already exists in ~/.ssh/known_hosts
+    # If key does not already exists, add it to known_hosts
+    - name: "Configure known hosts"
+      id: setup_known_hosts
+      run: |
+        if [[ -n $PUBLIC_KEY ]]
+        then
+          mkdir -p ~/.ssh
+          touch ~/.ssh/known_hosts
+          grep "${PUBLIC_KEY}" ~/.ssh/known_hosts >> /dev/null && KEY_EXISTS=true
+          if [[ -z $KEY_EXISTS ]]
+          then
+            echo "Adding public key."
+            echo "${PUBLIC_KEY}" >> ~/.ssh/known_hosts
+          fi
+        fi
       env:
-        SSH_AUTH_SOCK: ${{ inputs.ssh-auth-sock }}
+        PUBLIC_KEY: ${{ inputs.ssh-public-key }}
+      shell: bash
+
+    # Checks if $SSH_AUTH_SOCK is empty, meaning we have not already exported our socket
+    # If the variable is empty, export our socket, then start and bind the ssh-agent to the socket
+    # This will ensure the agent persisted between any job.steps that come after this action
+    #  and we are not starting multiple agents
+    - name: "Start ssh-agent"
+      id: start_ssh_agent
+      run: |
+        if [[ -z $SSH_AUTH_SOCK ]]
+        then
+          echo "Staring agent."
+          echo "SSH_AUTH_SOCK=${LOCAL_SSH_AUTH_SOCK}" >> $GITHUB_ENV
+          ssh-agent -a $LOCAL_SSH_AUTH_SOCK > /dev/null
+        else
+          echo "Agent is already running."
+        fi
+      env:
+        LOCAL_SSH_AUTH_SOCK: ${{ inputs.ssh-auth-sock }}
+      shell: bash
+
+    # If provided, add a private key to the agent
+    - name: "Add ssh key"
+      id: add_ssh_key
+      run: |
+        if [[ -n $PRIVATE_KEY ]]
+        then
+          echo "Adding private key."
+          ssh-add - <<< "${{ inputs.ssh-private-key }}"
+        fi
+      env:
+        PRIVATE_KEY: ${{ inputs.ssh-private-key }}
       shell: bash
